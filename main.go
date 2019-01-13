@@ -9,14 +9,22 @@ import (
 func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go write(&wg)
+	toWrite := make(chan int)
+	go generate(toWrite)
+	go write(&wg, toWrite)
 	wg.Wait()
 }
 
-func write(wg *sync.WaitGroup) {
+func generate(out chan int) {
 	for i := 0; i <= 10; i++ {
-		log.Printf("Writing %d", i)
+		out <- i
 		time.Sleep(1 * time.Second)
+	}
+}
+
+func write(wg *sync.WaitGroup, in chan int) {
+	for i := range in {
+		log.Printf("Writing %d", i)
 	}
 	wg.Done()
 }
