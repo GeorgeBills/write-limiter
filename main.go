@@ -14,7 +14,8 @@ const (
 	MaxWritesToBuffer = 100
 	// MaxWriteWaitMilliseconds is the maximum time we'll wait before we force a write.
 	MaxWriteWaitMilliseconds = 1000
-	writeRateMilliseconds    = 100
+	// WriteRateMilliseconds is the time we wait in between writes; we won't write more than this rate.
+	WriteRateMilliseconds = 100
 	// CheckpointFile is the file we write to.
 	CheckpointFile = "checkpoint.json"
 )
@@ -44,16 +45,22 @@ func generate(out chan ToWrite) {
 	}
 }
 
-// Write will persist out the toWrite value passed to it. If it receives a
-// single toWrite it will write that value immediately (select to read the
-// value, then immediately select to the default case and write the value). If
-// it's currently being flooded with toWrite values then it will busy loop on
+// Write will persist out the latest toWrite value passed to it through the in
+// channel.
+//
+// If it receives a single toWrite it will write that value immediately (select
+// to read the value, then immediately select to the default case and write the
+// value).
+//
+// If it's currently being flooded with toWrite values then it will busy loop on
 // the in channel until it has stored the last (i.e. most recently sent) value,
-// and then trigger a write through the default case. We force a write at least
-// every MaxWriteWaitMilliseconds, just to avoid a constant stream of toWrite
-// values resulting in us never writing. We intentionally take ToWrite values,
-// not pointers, just to make sure our client code isn't changing values around
-// on us while we wait to write.
+// and then trigger a write through the default case.
+//
+// We force a write at least every MaxWriteWaitMilliseconds to avoid a constant
+// stream of toWrite values resulting in us never writing.
+//
+// We take ToWrite values, not pointers, to make sure our client code isn't
+// changing values around on us while we wait to write.
 func Write(in chan ToWrite) {
 	var toWrite *ToWrite
 	ticker := time.Tick(MaxWriteWaitMilliseconds * time.Millisecond)
@@ -69,7 +76,7 @@ func Write(in chan ToWrite) {
 	for {
 		select {
 		case <-ticker:
-			// force a write at least every MaxWriteWaitMilliseconds
+			// force a write attempt at least every MaxWriteWaitMilliseconds
 			maybeWrite()
 		case next := <-in:
 			// read from channel until we've read the last (i.e. most recent) toWrite
@@ -77,10 +84,10 @@ func Write(in chan ToWrite) {
 		default:
 			// if there's a toWrite to write out then write it
 			maybeWrite()
-			// rate limit this case to max once per writeRateMilliseconds
+			// rate limit this case to max once per WriteRateMilliseconds
 			// otherwise we're just busy looping. we're waiting at least
 			// this time before we check for another value to write.
-			time.Sleep(writeRateMilliseconds * time.Millisecond)
+			time.Sleep(WriteRateMilliseconds * time.Millisecond)
 		}
 	}
 }
@@ -95,7 +102,6 @@ func writeToFile(toWrite *ToWrite) error {
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
-
 	encoder := json.NewEncoder(writer)
 	encoder.Encode(toWrite)
 	writer.Flush()
