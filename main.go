@@ -9,14 +9,14 @@ import (
 const (
 	// MaxWritesToBuffer is the maximum number of writes we buffer before we start blocking.
 	MaxWritesToBuffer = 100
-	// MinWriteWaitMilliseconds is the minimum time we'll wait before we force a write.
-	MinWriteWaitMilliseconds = 1000
+	// MaxWriteWaitMilliseconds is the maximum time we'll wait before we force a write.
+	MaxWriteWaitMilliseconds = 1000
 	writeRateMilliseconds    = 50
 )
 
 // ToWrite is some struct you want to write.
 type ToWrite struct {
-	i int
+	N int
 }
 
 func main() {
@@ -32,10 +32,10 @@ func generate(out chan ToWrite) {
 	for i := 0; true; i++ {
 		time.Sleep(time.Duration(rnd.Intn(30)) * time.Millisecond)
 		generated := &ToWrite{
-			i: i,
+			N: i,
 		}
 		out <- *generated
-		generated.i = -1
+		generated.N = -1
 	}
 }
 
@@ -45,17 +45,17 @@ func generate(out chan ToWrite) {
 // it's currently being flooded with toWrite values then it will busy loop on
 // the in channel until it has stored the last (i.e. most recently sent) value,
 // and then trigger a write through the default case. We force a write at least
-// every writeRateMilliseconds, just to avoid a constant stream of toWrite
+// every MaxWriteWaitMilliseconds, just to avoid a constant stream of toWrite
 // values resulting in us never writing. We intentionally take ToWrite values,
 // not pointers, just to make sure our client code isn't changing values around
 // on us while we wait to write.
 func Write(in chan ToWrite) {
 	var toWrite *ToWrite
-	ticker := time.Tick(MinWriteWaitMilliseconds * time.Millisecond)
+	ticker := time.Tick(MaxWriteWaitMilliseconds * time.Millisecond)
 	for {
 		select {
 		case <-ticker:
-			// force a write at least every MinWriteWaitMilliseconds
+			// force a write at least every MaxWriteWaitMilliseconds
 			if toWrite != nil {
 				doWrite(toWrite)
 				toWrite = nil
@@ -79,6 +79,6 @@ func Write(in chan ToWrite) {
 }
 
 func doWrite(toWrite *ToWrite) {
-	log.Printf("Writing %d", toWrite.i)
+	log.Printf("Writing %d", toWrite.N)
 	time.Sleep(500 * time.Millisecond)
 }
