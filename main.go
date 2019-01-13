@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -11,7 +14,7 @@ const (
 	MaxWritesToBuffer = 100
 	// MaxWriteWaitMilliseconds is the maximum time we'll wait before we force a write.
 	MaxWriteWaitMilliseconds = 1000
-	writeRateMilliseconds    = 50
+	writeRateMilliseconds    = 100
 )
 
 // ToWrite is some struct you want to write.
@@ -52,33 +55,49 @@ func generate(out chan ToWrite) {
 func Write(in chan ToWrite) {
 	var toWrite *ToWrite
 	ticker := time.Tick(MaxWriteWaitMilliseconds * time.Millisecond)
+	maybeWrite := func() {
+		if toWrite != nil {
+			err := doWrite(toWrite)
+			if err != nil {
+				log.Fatalf("Error writing to checkpoint file")
+			}
+			toWrite = nil
+		}
+	}
 	for {
 		select {
 		case <-ticker:
 			// force a write at least every MaxWriteWaitMilliseconds
-			if toWrite != nil {
-				doWrite(toWrite)
-				toWrite = nil
-			}
+			maybeWrite()
 		case next := <-in:
 			// read from channel until we've read the last (i.e. most recent) toWrite
 			toWrite = &next
 		default:
-			// if there's a value to write out then write that value
-			if toWrite != nil {
-				doWrite(toWrite)
-				toWrite = nil
-			} else {
-				// rate limit this case to max once per writeRateMilliseconds
-				// otherwise we're just busy looping. we're waiting at least
-				// this time before we check for another value to write.
-				time.Sleep(writeRateMilliseconds * time.Millisecond)
-			}
+			// if there's a toWrite to write out then write it
+			maybeWrite()
+			// rate limit this case to max once per writeRateMilliseconds
+			// otherwise we're just busy looping. we're waiting at least
+			// this time before we check for another value to write.
+			time.Sleep(writeRateMilliseconds * time.Millisecond)
 		}
 	}
 }
 
-func doWrite(toWrite *ToWrite) {
+func doWrite(toWrite *ToWrite) error {
 	log.Printf("Writing %d", toWrite.N)
-	time.Sleep(500 * time.Millisecond)
+
+	file, err := os.OpenFile("checkpoint.json", os.O_RDWR|os.O_CREATE, 0700)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+
+	encoder := json.NewEncoder(writer)
+	encoder.Encode(toWrite)
+	writer.Flush()
+	file.Sync()
+
+	return nil
 }
