@@ -20,9 +20,9 @@ func main() {
 func generate(out chan int) {
 	source := rand.NewSource(time.Now().UnixNano())
 	rnd := rand.New(source)
-	for i := 0; i <= 10; i++ {
-		out <- i
+	for i := 0; true; i++ {
 		time.Sleep(time.Duration(rnd.Intn(3000)) * time.Millisecond)
+		out <- i
 	}
 	close(out)
 }
