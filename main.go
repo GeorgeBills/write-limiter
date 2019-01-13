@@ -3,18 +3,16 @@ package main
 import (
 	"log"
 	"math/rand"
-	"sync"
 	"time"
 )
 
 func main() {
-	var wg sync.WaitGroup
-	wg.Add(1)
 	toWrite := make(chan int)
 	timer := time.Tick(1 * time.Second)
 	go generate(toWrite)
-	go write(&wg, toWrite, timer)
-	wg.Wait()
+	go write(toWrite, timer)
+	// block forever
+	select {}
 }
 
 func generate(out chan int) {
@@ -27,24 +25,18 @@ func generate(out chan int) {
 	close(out)
 }
 
-func write(wg *sync.WaitGroup, in chan int, ticker <-chan time.Time) {
+func write(in chan int, ticker <-chan time.Time) {
 	var next int
-LOOP:
+	var ready bool
 	for {
 		select {
-		case i, ok := <-in:
-			if !ok {
-				break LOOP
-			}
-			next = i
+		case i := <-in:
+			next, ready = i, true
 		case <-ticker:
-			if next > 0 {
+			if ready {
 				log.Printf("Writing %d", next)
-			} else {
-				log.Printf("Nothing to write")
 			}
-			next = -1
+			ready = false
 		}
 	}
-	wg.Done()
 }
