@@ -15,6 +15,8 @@ const (
 	// MaxWriteWaitMilliseconds is the maximum time we'll wait before we force a write.
 	MaxWriteWaitMilliseconds = 1000
 	writeRateMilliseconds    = 100
+	// CheckpointFile is the file we write to.
+	CheckpointFile = "checkpoint.json"
 )
 
 // ToWrite is some struct you want to write.
@@ -57,7 +59,7 @@ func Write(in chan ToWrite) {
 	ticker := time.Tick(MaxWriteWaitMilliseconds * time.Millisecond)
 	maybeWrite := func() {
 		if toWrite != nil {
-			err := doWrite(toWrite)
+			err := writeToFile(toWrite)
 			if err != nil {
 				log.Fatalf("Error writing to checkpoint file")
 			}
@@ -83,10 +85,10 @@ func Write(in chan ToWrite) {
 	}
 }
 
-func doWrite(toWrite *ToWrite) error {
+func writeToFile(toWrite *ToWrite) error {
 	log.Printf("Writing %d", toWrite.N)
 
-	file, err := os.OpenFile("checkpoint.json", os.O_RDWR|os.O_CREATE, 0700)
+	file, err := os.OpenFile(CheckpointFile, os.O_RDWR|os.O_CREATE, 0700)
 	if err != nil {
 		return err
 	}
