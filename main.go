@@ -31,8 +31,11 @@ func write(in chan int, ticker <-chan time.Time) {
 	for {
 		select {
 		case i := <-in:
+			// save only the next (most recent) value to write out
 			next, ready = i, true
 		case <-ticker:
+			// if there's a value to write out then write that value
+			// else go back to blocking
 			if ready {
 				log.Printf("Writing %d", next)
 			}
