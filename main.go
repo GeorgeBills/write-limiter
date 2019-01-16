@@ -93,7 +93,7 @@ func Write(in chan ToWrite) {
 }
 
 func writeToFile(toWrite *ToWrite) error {
-	log.Printf("Writing %d", toWrite.N)
+	log.Printf("Writing %v", toWrite)
 
 	file, err := os.OpenFile(CheckpointFile, os.O_RDWR|os.O_CREATE, 0700)
 	if err != nil {
