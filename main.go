@@ -12,10 +12,10 @@ import (
 const (
 	// MaxWritesToBuffer is the maximum number of writes we buffer before we start blocking.
 	MaxWritesToBuffer = 100
-	// MaxWriteWaitMilliseconds is the maximum time we'll wait before we force a write.
-	MaxWriteWaitMilliseconds = 1000
-	// WriteRateMilliseconds is the time we wait in between writes; we won't write more than this rate.
-	WriteRateMilliseconds = 100
+	// MaxWriteWait is the maximum time we'll wait before we force a write.
+	MaxWriteWait = 1000 * time.Millisecond
+	// WriteRate is the time we wait in between writes; we won't write more than this rate.
+	WriteRate = 100 * time.Millisecond
 	// CheckpointFile is the file we write to.
 	CheckpointFile = "checkpoint.json"
 )
@@ -56,14 +56,14 @@ func generate(out chan ToWrite) {
 // the in channel until it has stored the last (i.e. most recently sent) value,
 // and then trigger a write through the default case.
 //
-// We force a write at least every MaxWriteWaitMilliseconds to avoid a constant
-// stream of toWrite values resulting in us never writing.
+// We force a write at least every MaxWriteWait to avoid a constant stream of
+// toWrite values resulting in us never writing.
 //
 // We take ToWrite values, not pointers, to make sure our client code isn't
 // changing values around on us while we wait to write.
 func Write(in chan ToWrite) {
 	var toWrite *ToWrite
-	ticker := time.Tick(MaxWriteWaitMilliseconds * time.Millisecond)
+	ticker := time.Tick(MaxWriteWait)
 	maybeWrite := func() {
 		if toWrite != nil {
 			err := writeToFile(toWrite)
@@ -76,7 +76,7 @@ func Write(in chan ToWrite) {
 	for {
 		select {
 		case <-ticker:
-			// force a write attempt at least every MaxWriteWaitMilliseconds
+			// force a write attempt at least every MaxWriteWait
 			maybeWrite()
 		case next := <-in:
 			// read from channel until we've read the last (i.e. most recent) toWrite
@@ -84,10 +84,10 @@ func Write(in chan ToWrite) {
 		default:
 			// if there's a toWrite to write out then write it
 			maybeWrite()
-			// rate limit this case to max once per WriteRateMilliseconds
-			// otherwise we're just busy looping. we're waiting at least
-			// this time before we check for another value to write.
-			time.Sleep(WriteRateMilliseconds * time.Millisecond)
+			// rate limit this case to max once per WriteRate otherwise we're
+			// just busy looping. we're waiting at least this time before we
+			// check for another value to write.
+			time.Sleep(WriteRate)
 		}
 	}
 }
